@@ -3,13 +3,15 @@ import random
 import redis
 
 from rest_framework import status
+from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.viewsets import GenericViewSet
 from .serializers import SmsAuthPostSerializer, SmsAuthGetSerializer
 from django.conf import settings
 
 
-class SmsAuthView(APIView):
+class SmsAuthView(GenericViewSet):
 
     def get(self, request):
         serializer = SmsAuthGetSerializer(data=request.GET)
@@ -23,7 +25,8 @@ class SmsAuthView(APIView):
 
         return Response(sms_auth_code)
 
-    def post(self, request):
+    @action(detail=False, methods=["POST", ])
+    def test(self, request):
         serializer = SmsAuthPostSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
