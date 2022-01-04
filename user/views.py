@@ -2,22 +2,51 @@ import datetime
 import redis
 import jwt
 from rest_framework import status
+from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from uuid import uuid4
 from django.conf import settings
+from rest_framework.viewsets import GenericViewSet
+
 from .models import User
 from .serializers import UserSerializer, TestSerializer, ChangePasswordSerializer, AuthSerializer
 
 
-class UserAPIView(APIView):
+class UserAPIView(GenericViewSet):
 
-    def get(self, request):
+    @action(methods=['GET'], detail=False)
+    def get_all(self, request):
         queryset = User.objects.all()
         serializer = TestSerializer(queryset, many=True)
         return Response(serializer.data)
 
-    def post(self, request):
+    @action(methods=['GET'], detail=False)
+    def get_my_info(self, request):
+        # Validate AUTHORIZATION header
+        if 'HTTP_AUTHORIZATION' not in request.META:
+            return Response("Access Token required", status=status.HTTP_401_UNAUTHORIZED)
+
+        authorization_header = request.META['HTTP_AUTHORIZATION']
+        if authorization_header.split(' ')[0] != 'Bearer':
+            return Response('Wrong AUTHORIZATION header type', status=status.HTTP_401_UNAUTHORIZED)
+
+        access_token = authorization_header.split(' ')[1]
+
+        # Validate Access Token (JWT Token)
+        try:
+            payload = jwt.decode(access_token, settings.JWT_SECRET_KEY, algorithms='HS256')
+        except jwt.ExpiredSignatureError:
+            return Response('Token expired', status=status.HTTP_401_UNAUTHORIZED)
+        except jwt.InvalidTokenError:
+            return Response('Invalid Token', status=status.HTTP_401_UNAUTHORIZED)
+
+        queryset = User.objects.get(token=payload['token'])
+        serializer = UserSerializer(queryset, many=False)
+        return Response(serializer.data)
+
+    @action(methods=['POST'], detail=False)
+    def sign_up_user(self, request):
         # Validate Verified Token
         if 'HTTP_X_SMS_VERIFIEDTOKEN' not in request.META:
             return Response('Verified Token required', status=status.HTTP_400_BAD_REQUEST)
@@ -41,7 +70,8 @@ class UserAPIView(APIView):
 
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-    def put(self, request):
+    @action(methods=['PUT'], detail=False)
+    def change_password(self, request):
         # Validate Verified Token
         if 'HTTP_X_SMS_VERIFIEDTOKEN' not in request.META:
             return Response('Verified Token required', status=status.HTTP_400_BAD_REQUEST)
@@ -66,8 +96,8 @@ class UserAPIView(APIView):
 
 
 class AuthAPIView(APIView):
-    # TODO: Change routing(url path) to proper value -> API is for getting JWT token
-    def post(self, request):
+
+    def get(self, request):
         serializer = AuthSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -80,30 +110,6 @@ class AuthAPIView(APIView):
         # Return user info with JWT Token
         jwt_token = generate_jwt_token(getattr(user, 'token'))
         serializer.update(user, serializer.validated_data, jwt_token=jwt_token)
-        return Response(serializer.data)
-
-    # TODO: Change routing
-    def get(self, request):
-        # Validate AUTHORIZATION header
-        if 'HTTP_AUTHORIZATION' not in request.META:
-            return Response("Access Token required", status=status.HTTP_401_UNAUTHORIZED)
-
-        authorization_header = request.META['HTTP_AUTHORIZATION']
-        if authorization_header.split(' ')[0] != 'Bearer':
-            return Response('Wrong AUTHORIZATION header type', status=status.HTTP_401_UNAUTHORIZED)
-
-        access_token = authorization_header.split(' ')[1]
-
-        # Validate Access Token (JWT Token)
-        try:
-            payload = jwt.decode(access_token, settings.JWT_SECRET_KEY, algorithms='HS256')
-        except jwt.ExpiredSignatureError:
-            return Response('Token expired', status=status.HTTP_401_UNAUTHORIZED)
-        except jwt.InvalidTokenError:
-            return Response('Invalid Token', status=status.HTTP_401_UNAUTHORIZED)
-
-        queryset = User.objects.get(token=payload['token'])
-        serializer = UserSerializer(queryset, many=False)
         return Response(serializer.data)
 
 

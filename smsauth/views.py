@@ -3,7 +3,6 @@ import random
 import redis
 
 from rest_framework import status
-from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 from .serializers import SmsAuthPostSerializer, SmsAuthGetSerializer
@@ -24,8 +23,7 @@ class SmsAuthView(GenericViewSet):
 
         return Response(sms_auth_code)
 
-    @action(detail=False, methods=["POST", ])
-    def test(self, request):
+    def post(self, request):
         serializer = SmsAuthPostSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
